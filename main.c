@@ -22,7 +22,6 @@ static void event_ctcp_req(irc_session_t *session, char const *event, char const
 static void event_ctcp_rep(irc_session_t *session, char const *event, char const *origin, char const **params, unsigned int count);
 static void event_ctcp_action(irc_session_t *session, char const *event, char const *origin, char const **params, unsigned int count);
 static void event_unknown(irc_session_t *session, char const *event, char const *origin, char const **params, unsigned int count);
-static void event_connect(irc_session_t *session, char const *event, char const *origin, char const **params, unsigned int count);
 static void event_numeric(irc_session_t *session, unsigned int event, char const *origin, char const **params, unsigned int count);
 static void event_dcc_chat_req(irc_session_t *session, char const *nick, char const *addr, irc_dcc_t dccid);
 static void event_dcc_send_req(irc_session_t *session, char const *nick, char const *addr, char const *filename, unsigned long size, irc_dcc_t dccid);
@@ -49,7 +48,6 @@ int main() {
     callbacks.event_ctcp_rep = event_ctcp_rep;
     callbacks.event_ctcp_action = event_ctcp_action;
     callbacks.event_unknown = event_unknown;
-    callbacks.event_connect = event_connect;
     callbacks.event_numeric = event_numeric;
     callbacks.event_dcc_chat_req = event_dcc_chat_req;
     callbacks.event_dcc_send_req = event_dcc_send_req;
@@ -150,10 +148,6 @@ static void event_ctcp_action(irc_session_t *session, char const *event, char co
 }
 
 static void event_unknown(irc_session_t *session, char const *event, char const *origin, char const **params, unsigned int count) {
-
-}
-
-static void event_connect(irc_session_t *session, char const *event, char const *origin, char const **params, unsigned int count) {
 
 }
 
