@@ -1,11 +1,11 @@
 cmake_minimum_required(VERSION 3.10.2)
-project(ircbot)
+project(ofct-matchbot)
 
 find_package(OpenSSL REQUIRED)
 
 set(CMAKE_C_STANDARD 11)
 
-add_executable(ircbot
+add_executable(${PROJECT_NAME}
     main.c
     match.h match.c
     typedef.h
