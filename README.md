@@ -23,10 +23,30 @@ make
 sudo make install
 ```
 
+## Compile
+
+First, open the terminal and clone the repository.
+If you don't have git installed, just download the code from the [github repo](https://github.com/OFCT-Devs/ofct-matchbot).
+```shell
+git clone https://github.com/OFCT-Devs/ofct-matchbot.git
+```
+
+In directory `ofct-matchbot`, make a new directory `build`.
+
+```shell
+mkdir build
+cd build
+```
+
 Add a file named `manage.cfg` in the `build` folder and write your irc account info as below.
 ```text
 YOUR_NICKNAME
 YOUR_IRC_PASSWORD
+```
+
+Compile the the source.
+```shell
+cmake ..
 ```
 
 Now run the file by typing
