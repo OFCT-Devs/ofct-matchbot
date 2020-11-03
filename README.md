@@ -10,6 +10,7 @@ To install `CMake` and `OpenSSL`, use the command
 ```shell script
 sudo apt install cmake openssl
 ```
+
 To install `libircclient`, get the latest version from
 [sourceforge](https://sourceforge.net/projects/libircclient)
 and use the command
@@ -18,6 +19,22 @@ and use the command
 make
 sudo make install
 ```
+
+Add a file named `manage.cfg` in the `build` folder and write your irc account info as below.
+```text
+YOUR_NICKNAME
+YOUR_IRC_PASSWORD
+```
+
+Now run the file by typing
+```shell
+./ofct-matchbot
+```
+
+## TODO
+- Cross-platform: Make it run at Windows 10 too, at least.
+- Implement `match()`
+- Make a grammar for `manage.cfg`.
 
 ## LICENSE
 MIT LICENSE
