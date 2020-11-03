@@ -5,6 +5,10 @@ find_package(OpenSSL REQUIRED)
 
 set(CMAKE_C_STANDARD 11)
 
-add_executable(ircbot main.c)
+add_executable(ircbot
+    main.c
+    match.h match.c
+    typedef.h
+)
 
-target_link_libraries(${PROJECT_NAME} PRIVATE crypto ssl /lib/libircclient.so)
+target_link_libraries(${PROJECT_NAME} PRIVATE crypto ssl pthread /lib/libircclient.so)

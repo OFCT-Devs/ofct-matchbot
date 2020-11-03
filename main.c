@@ -1,14 +1,15 @@
 #include <libircclient.h>
 #include <libirc_rfcnumeric.h>
 
-// http://www.ulduzsoft.com/libircclient/index.html
 #include <stdio.h>
 #include <string.h>
+#include <threads.h>
+#include <time.h>
+#include <unistd.h>
 
-typedef struct {
-    char *user;
-    char *channel;
-} irc_ctx_t;
+#include "typedef.h"
+#include "match.h"
+
 
 static void event_connect(irc_session_t *session, char const *event, char const *origin, char const **params, unsigned int count);
 static void event_nick(irc_session_t *session, char const *event, char const *origin, char const **params, unsigned int count);
@@ -34,9 +35,23 @@ static void event_dcc_send_req(irc_session_t *session, char const *nick, char co
 
 static void dcc_callback(irc_session_t *session, irc_dcc_t id, int status, void *ctx, char const *data, unsigned int length);
 
+/****************************************************************************************************************************************************/
+
+static void get_user_info(user_info_t *const user);
+static void free_user_info(user_info_t *const user);
+
+static void free_ctx(irc_ctx_t *ctx);
+
+/* osu! specific functions */
+static void *banchobot_message_parse(irc_session_t *session, char const *message);
+//static int free_parsed_message(void *message);
+
+static char *init_channel = "#lobby";
+
 int main() {
     irc_callbacks_t callbacks;
     irc_ctx_t ctx;
+    user_info_t user;
 
     memset(&callbacks, 0, sizeof(callbacks));
     callbacks.event_connect = event_connect;
@@ -61,26 +76,33 @@ int main() {
     callbacks.event_dcc_chat_req = event_dcc_chat_req;
     callbacks.event_dcc_send_req = event_dcc_send_req;
 
-    ctx.channel = "#korean";
-    ctx.user = "A_BCDe";
+    get_user_info(&user);
+
+    // initialize ctx
+    memset(&ctx, 0, sizeof(ctx));
+    ctx.match_info.game_title = "TEST";
+    ctx.user = (char*)malloc(sizeof(char) * (strlen(user.id) + 1));
+    strcpy(ctx.user, user.id);
 
     irc_session_t *session = irc_create_session(&callbacks);
 
     if(!session) {
         int err = irc_errno(session);
         fprintf(stderr, "error code %d: %s\n", err, irc_strerror(err));
-        return -1;
+        return err;
     }
     printf("Hello, world!\n");
 
     irc_set_ctx(session, &ctx);
     irc_option_set(session, LIBIRC_OPTION_STRIPNICKS);
 
-    if(irc_connect(session, "irc.ppy.sh", 6667, "caabe0", "A_BCDe", "A_BCDe", "A_BCDe")) {
+    if(irc_connect(session, "irc.ppy.sh", 6667, user.pwd, user.id, user.id, user.id)) {
         int err = irc_errno(session);
         fprintf(stderr, "error code %d: %s\n", err, irc_strerror(err));
-        return -1;
+        return err;
     }
+
+    free_user_info(&user);
 
     if(irc_run(session)) {
         int err = irc_errno(session);
@@ -88,19 +110,20 @@ int main() {
     }
 
     printf("Goodbye, world!\n");
-
-    irc_destroy_session(session);
     return 0;
 }
 
 static void event_connect(irc_session_t *session, char const *event, char const *origin, char const **params, unsigned int count) {
     printf("Connected to server!\n");
     irc_ctx_t *ctx = (irc_ctx_t*)irc_get_ctx(session);
-    printf("Trying to connect to %s...", ctx->channel);
-    if(irc_cmd_join(session, ctx->channel, NULL)) {
-        int err = irc_errno(session);
-        fprintf(stderr, "error code %d: %s\n", err, irc_strerror(err));
-        irc_disconnect(session);
+    if(ctx->channel == NULL) {
+        printf("Trying to connect to %s...\n", init_channel);
+        if(irc_cmd_join(session, init_channel, NULL)) {
+            int err = irc_errno(session);
+            fprintf(stderr, "error code %d: %s\n", err, irc_strerror(err));
+            irc_disconnect(session);
+            return;
+        }
     }
 }
 
@@ -113,21 +136,64 @@ static void event_quit(irc_session_t *session, char const *event, char const *or
 }
 
 static void event_join(irc_session_t *session, char const *event, char const *origin, char const **params, unsigned int count) {
-    printf("%s has joined the channel %s.\n", origin, params[0]);
+    //printf("%s has joined the channel %s.\n", origin, params[0]);
     irc_ctx_t *ctx = (irc_ctx_t*)irc_get_ctx(session);
+    //printf("%s %s %s %s\n", origin, ctx->user, params[0], init_channel);
     if(strcmp(origin, ctx->user) == 0) {
-        printf("%s has joined the channel %s", origin, params[0]);
-        if(irc_cmd_msg(session, params[0], "Hello!")) {
-            int err = irc_errno(session);
-            printf("error code %d: %s\n", err, irc_strerror(err));
-            printf("Sending message \"Hello\" failed!\n");
-            irc_disconnect(session);
+        //printf("params[0] = %s, ctx->match_channel = %s\n", params[0], ctx->match_info.match_channel);
+
+        if(strcmp(params[0], init_channel) == 0) {
+            printf("%s has joined the channel %s\n", origin, params[0]);
+            char make_game[512]; // = "/join #mp_69170086";
+            sprintf(make_game, "!mp make %s", ctx->match_info.game_title); // currently has title of the match
+            if(irc_cmd_msg(session, params[0], make_game)) {
+                int err = irc_errno(session);
+                printf("error code %d: %s\n", err, irc_strerror(err));
+                printf("Sending message \"%s\" failed!\n", make_game);
+                irc_disconnect(session);
+                return;
+            }
+        }
+        else if(ctx->match_info.match_channel == NULL) {
+            printf("Match is not set properly yet.\n");
+            printf("This may be a part of a progress.\n");
+            printf("Leaving the channel.\n");
+            if(irc_cmd_part(session, params[0])) {
+                int err = irc_errno(session);
+                fprintf(stderr, "error code %d: %s\n", err, irc_strerror(err));
+                irc_disconnect(session);
+                return;
+            }
+        }
+        else if(strcmp(params[0], ctx->match_info.match_channel) == 0) {
+            printf("Successfully joined to the match channel %s!\n", ctx->match_info.match_channel);
+
+            match(session);
+
+            printf("Now closing the channel...\n");
+            if(irc_cmd_msg(session, ctx->match_info.match_channel, "!mp close")) {
+                int err = irc_errno(session);
+                printf("error code %d: %s\n", err, irc_strerror(err));
+                printf("Sending message \"%s\" failed!\n", "!mp close");
+                irc_disconnect(session);
+                return;
+            }
+        }
+
+        else {
+            printf("Someone called to the channel %s, but you are not supposed to be here.\n", params[0]);
+            if(irc_cmd_part(session, params[0])) {
+                int err = irc_errno(session);
+                fprintf(stderr, "error code %d: %s\n", err, irc_strerror(err));
+                irc_disconnect(session);
+                return;
+            }
         }
     }
 }
 
 static void event_part(irc_session_t *session, char const *event, char const *origin, char const **params, unsigned int count) {
-    printf("%s has left the channel %s.\n", origin, params[0]);
+    //printf("%s has left the channel %s.\n", origin, params[0]);
 }
 
 static void event_mode(irc_session_t *session, char const *event, char const *origin, char const **params, unsigned int count) {
@@ -164,21 +230,60 @@ static void event_channel(irc_session_t *session, char const *event, char const 
         printf("%s has sent a message to channel %s.\n", origin, params[0]);
     }
     else {
-        printf("%s has sent a message to channel %s:\n%s\n", origin, params[0], params[1]);
         irc_ctx_t *ctx = (irc_ctx_t*)irc_get_ctx(session);
-        if(strcmp(origin, ctx->user) != 0 && strcmp(params[1], "Hello!") == 0) {
-            printf("Got the right message!\n");
-            irc_disconnect(session);
+        if(strcmp(params[0], init_channel) != 0) {
+            printf("%s has sent a message to channel %s:\n%s\n", origin, params[0], params[1]);
+            if(strcmp(origin, "BanchoBot") == 0 && strcmp(params[0], ctx->match_info.match_channel) == 0 && strcmp(params[1], "Closed the match") == 0) {
+                free_ctx(ctx);
+                irc_disconnect(session);
+            }
         }
     }
 }
 
 static void event_privmsg(irc_session_t *session, char const *event, char const *origin, char const **params, unsigned int count) {
     if(count == 1) {
-        printf("%s has sent you a message.", origin);
+        printf("%s has sent you a private message.", origin);
     }
     else {
-        printf("%s has sent you a message:\n%s\n", origin, params[1]);
+        printf("%s has sent you a private message:\n%s\n", origin, params[1]);
+        if(strcmp(origin, "BanchoBot") == 0) {
+            void *message = banchobot_message_parse(session, params[1]);
+            switch((banchobot_replies)((char**)message)[0]) {
+
+                /* Got a message by BanchoBot:
+                   Created the tournament match https://osu.ppy.sh/mp/NUMBER GAME_TITLE
+                   
+                   char **message has:
+                   [ (char*)BANCHOBOT_MULTI_CREATED | (char*)NUMBER | (char*)GAME_TITLE ] */
+                case BANCHOBOT_MULTI_CREATED: {
+                    irc_ctx_t *ctx = irc_get_ctx(session);
+
+                    ctx->match_info.match_channel = (char*)malloc(sizeof(char) * (strlen(((char**)message)[1]) + 6));
+                    sprintf(ctx->match_info.match_channel, "#mp_%s", ((char**)message)[1]);
+                    ctx->match_info.game_title = ((char**)message)[2];
+
+                    printf("match channel : %s\n", ctx->match_info.match_channel);
+                    printf("game title : %s\n", ctx->match_info.game_title);
+
+                    // freeing unnecessary memory
+                    free(((char**)message)[1]);
+                    free(message);
+
+                    if(irc_cmd_join(session, ctx->match_info.match_channel, NULL)) {
+                        int err = irc_errno(session);
+                        fprintf(stderr, "error code %d: %s\n", err, irc_strerror(err));
+                        irc_disconnect(session);
+                    }
+                } break;
+
+                default: {
+                    printf("Not yet implemented, or invalid value!");
+                    free(message);
+                    irc_disconnect(session);
+                }
+            }
+        }
     }
 }
 
@@ -230,9 +335,10 @@ static void event_unknown(irc_session_t *session, char const *event, char const 
 
 static void event_numeric(irc_session_t *session, unsigned int event, char const *origin, char const **params, unsigned int count) {
     //printf("%s:\n", origin);
+    /*
     for(unsigned int i = 1; i < count; i++) {
         printf("%s\n", params[i]);
-    }
+    }*/
     //printf("%d %d\n", strcmp(origin, "cho.ppy.sh"), strcmp(params[1], "- boat:   https://twitter.com/banchoboat"));
     /*
     if(strcmp(origin, "cho.ppy.sh") == 0 && strcmp(params[1], "boat:   https://twitter.com/banchoboat") == 0) {
@@ -267,3 +373,105 @@ static void dcc_callback(irc_session_t *session, irc_dcc_t dccid, int status, vo
         printf("Remote party said: %s\n", data);
     }
 }
+
+/****************************************************************************************************************************************************/
+
+static void get_user_info(user_info_t *const user) {
+    char buffer[512] = {};
+    FILE *file = fopen("manage.cfg", "r");
+    size_t l;
+
+    fscanf(file, "%s", buffer);
+    l = strlen(buffer);
+    user->id = (char*)malloc(sizeof(char) * (l + 1));
+    strncpy(user->id, buffer, l);
+
+    fscanf(file, "%s", buffer);
+    l = strlen(buffer);
+    user->pwd = (char*)malloc(sizeof(char) * (l + 1));
+    strncpy(user->pwd, buffer, l);
+
+    fclose(file);
+}
+
+static void free_user_info(user_info_t *const user) {
+    free(user->id);
+    free(user->pwd);
+}
+
+static void free_ctx(irc_ctx_t *ctx) {
+    free(ctx->channel);
+    free(ctx->user);
+    //free(ctx->match_info.game_title);
+    free(ctx->match_info.match_channel);
+}
+
+/* osu! specific functions */
+
+static void *banchobot_message_parse(irc_session_t *session, char const *message) {
+    /*
+        1.  BANCHOBOT_MULTI_CREATED
+            Created the tournament match https://osu.ppy.sh/mp/NUMBER GAME_TITLE
+
+            Return: [ (char*)banchobot_replies | (char*)NUMBER | (char*)GAME_TITLE ]
+    */
+    if(strncmp("Created the tournament match https://osu.ppy.sh/mp/", message, 51) == 0) {
+        if(irc_cmd_part(session, init_channel)) {
+            int err = irc_errno(session);
+            fprintf(stderr, "error code %d: %s\n", err, irc_strerror(err));
+            irc_disconnect(session);
+        }
+
+        size_t idx = strlen("Created the tournament match https://osu.ppy.sh/mp/");
+        size_t number_len = 0;
+
+        while(message[idx + number_len] >= '0' && message[idx + number_len] <= '9') number_len++;
+        char *match_number = (char*)malloc(sizeof(char) * (number_len + 1));
+        memcpy(match_number, message + idx, number_len + 1);
+        match_number[number_len] = '\0';
+
+        idx += number_len + 1;
+        number_len = strlen(message + idx);
+        char *game_title = (char*)malloc(sizeof(char) * (number_len + 1));
+        memcpy(game_title, message + idx, number_len + 1);
+
+        void *ret = malloc(sizeof(char*) * 3);
+        ((char**)ret)[0] = (char*)BANCHOBOT_MULTI_CREATED;
+        ((char**)ret)[1] = match_number;
+        ((char**)ret)[2] = game_title;
+
+        return ret;
+    }
+    /*
+        -1, 0. BANCHOBOT_UNKNOWN
+        All replies that aren't contained in any cases of above
+    */
+    else {
+        void *ret = malloc(sizeof(char*));
+        ((char**)ret)[0] = (char*)BANCHOBOT_UNKNOWN;
+
+        return ret;
+    }
+}
+
+/*
+static int free_parsed_message(void *parsed_message) {
+    switch((banchobot_replies)((char**)parsed_message)[0]) {
+        case BANCHOBOT_MULTI_CREATED: {
+            free(((char**)parsed_message)[1]);
+            free(((char**)parsed_message)[2]);
+            free(parsed_message);
+        } break;
+
+        case BANCHOBOT_NONE:
+        case BANCHOBOT_UNKNOWN: {
+            free(parsed_message);
+        } break;
+
+        default: {
+            return -1;
+        }
+    }
+    return 0;
+}
+*/
