@@ -1,4 +1,7 @@
-# `ircbot`: An irc bot written in C used for [osu!](https://osu.ppy.sh/home) match
+# `ofct-matchbot`: An irc bot written in C used for [osu!](https://osu.ppy.sh/home) match
+
+## WARNING
+This project is currently under construction, so it **DOES NOT WORK AS A BOT YET**. However feel free to discuss about the program by making new issues.
 
 ## Prerequisites
 The current project is known to be compiled with `gcc 9.3.0` under `Ubuntu 20.04`.
