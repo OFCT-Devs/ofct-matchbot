@@ -10,6 +10,8 @@
 #include "typedef.h"
 #include "match.h"
 
+/* There should be some unnecesary events;
+   Will handle them when it is really not needed. */
 
 static void event_connect(irc_session_t *session, char const *event, char const *origin, char const **params, unsigned int count);
 static void event_nick(irc_session_t *session, char const *event, char const *origin, char const **params, unsigned int count);
@@ -136,12 +138,10 @@ static void event_quit(irc_session_t *session, char const *event, char const *or
 }
 
 static void event_join(irc_session_t *session, char const *event, char const *origin, char const **params, unsigned int count) {
-    //printf("%s has joined the channel %s.\n", origin, params[0]);
     irc_ctx_t *ctx = (irc_ctx_t*)irc_get_ctx(session);
-    //printf("%s %s %s %s\n", origin, ctx->user, params[0], init_channel);
     if(strcmp(origin, ctx->user) == 0) {
-        //printf("params[0] = %s, ctx->match_channel = %s\n", params[0], ctx->match_info.match_channel);
 
+        /* Before making any channel, the bot first joins the #lobby. */
         if(strcmp(params[0], init_channel) == 0) {
             printf("%s has joined the channel %s\n", origin, params[0]);
             char make_game[512]; // = "/join #mp_69170086";
@@ -154,6 +154,8 @@ static void event_join(irc_session_t *session, char const *event, char const *or
                 return;
             }
         }
+
+        /* There may be some cases when the setting is not complete. */
         else if(ctx->match_info.match_channel == NULL) {
             printf("Match is not set properly yet.\n");
             printf("This may be a part of a progress.\n");
@@ -165,6 +167,8 @@ static void event_join(irc_session_t *session, char const *event, char const *or
                 return;
             }
         }
+
+        /* You are joining to the match you have made! */
         else if(strcmp(params[0], ctx->match_info.match_channel) == 0) {
             printf("Successfully joined to the match channel %s!\n", ctx->match_info.match_channel);
 
@@ -180,6 +184,7 @@ static void event_join(irc_session_t *session, char const *event, char const *or
             }
         }
 
+        /* You are not supposed to be in this channel. */
         else {
             printf("Someone called to the channel %s, but you are not supposed to be here.\n", params[0]);
             if(irc_cmd_part(session, params[0])) {
@@ -334,22 +339,7 @@ static void event_unknown(irc_session_t *session, char const *event, char const 
 }
 
 static void event_numeric(irc_session_t *session, unsigned int event, char const *origin, char const **params, unsigned int count) {
-    //printf("%s:\n", origin);
-    /*
-    for(unsigned int i = 1; i < count; i++) {
-        printf("%s\n", params[i]);
-    }*/
-    //printf("%d %d\n", strcmp(origin, "cho.ppy.sh"), strcmp(params[1], "- boat:   https://twitter.com/banchoboat"));
-    /*
-    if(strcmp(origin, "cho.ppy.sh") == 0 && strcmp(params[1], "boat:   https://twitter.com/banchoboat") == 0) {
-        irc_dcc_t dccid;
-        if(irc_dcc_chat(session, NULL, "BanchoBot", dcc_callback, &dccid)) {
-            int err = irc_errno(session);
-            fprintf(stderr, "error code %d: %s\n", err, irc_strerror(err));
-            exit(-1);
-        }
-    }
-    */
+    /* Used to print the fancy Bancho in osu! irc. */
 }
 
 static void event_dcc_chat_req(irc_session_t *session, char const *nick, char const *addr, irc_dcc_t dccid) {
