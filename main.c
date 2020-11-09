@@ -157,6 +157,7 @@ static void event_join(irc_session_t *session, char const *event, char const *or
 
         /* There may be some cases when the setting is not complete. */
         else if(ctx->match_info.match_channel == NULL) {
+            printf("The channel is %s.\n", params[0]);
             printf("Match is not set properly yet.\n");
             printf("This may be a part of a progress.\n");
             printf("Leaving the channel.\n");
@@ -172,9 +173,28 @@ static void event_join(irc_session_t *session, char const *event, char const *or
         else if(strcmp(params[0], ctx->match_info.match_channel) == 0) {
             printf("Successfully joined to the match channel %s!\n", ctx->match_info.match_channel);
 
-            match(session);
+            thrd_t match_thread;
+            
+            switch(thrd_create(&match_thread, match, session)) {
+                case thrd_success: {
+                    thrd_detach(match_thread);
+                    printf("Thread started running in the other thread!\n");
+                } return;
+                case thrd_nomem: {
+                    fprintf(stderr, "Not enough memory to run the match!\n");
+                } break;
+                case thrd_error: {
+                    fprintf(stderr, "Thread error!\n");
+                } break;
+                default: {
+                    fprintf(stderr, "Unknown error: Faulty return of thrd_create().\n");
+                    exit(1);
+                }
+            }
 
-            printf("Now closing the channel...\n");
+            //match(session);
+
+            printf("Closing the channel due to error...\n");
             if(irc_cmd_msg(session, ctx->match_info.match_channel, "!mp close")) {
                 int err = irc_errno(session);
                 printf("error code %d: %s\n", err, irc_strerror(err));
@@ -239,6 +259,7 @@ static void event_channel(irc_session_t *session, char const *event, char const 
         if(strcmp(params[0], init_channel) != 0) {
             printf("%s has sent a message to channel %s:\n%s\n", origin, params[0], params[1]);
             if(strcmp(origin, "BanchoBot") == 0 && strcmp(params[0], ctx->match_info.match_channel) == 0 && strcmp(params[1], "Closed the match") == 0) {
+                printf("Closed!\n");
                 free_ctx(ctx);
                 irc_disconnect(session);
             }
@@ -399,6 +420,8 @@ static void free_ctx(irc_ctx_t *ctx) {
 /* osu! specific functions */
 
 static void *banchobot_message_parse(irc_session_t *session, char const *message) {
+    printf("BanchoBot said: %s\n", message);
+
     /*
         1.  BANCHOBOT_MULTI_CREATED
             Created the tournament match https://osu.ppy.sh/mp/NUMBER GAME_TITLE
@@ -432,6 +455,13 @@ static void *banchobot_message_parse(irc_session_t *session, char const *message
 
         return ret;
     }
+
+    /**/
+
+    
+
+    //if(1) {}
+
     /*
         -1, 0. BANCHOBOT_UNKNOWN
         All replies that aren't contained in any cases of above
@@ -443,25 +473,3 @@ static void *banchobot_message_parse(irc_session_t *session, char const *message
         return ret;
     }
 }
-
-/*
-static int free_parsed_message(void *parsed_message) {
-    switch((banchobot_replies)((char**)parsed_message)[0]) {
-        case BANCHOBOT_MULTI_CREATED: {
-            free(((char**)parsed_message)[1]);
-            free(((char**)parsed_message)[2]);
-            free(parsed_message);
-        } break;
-
-        case BANCHOBOT_NONE:
-        case BANCHOBOT_UNKNOWN: {
-            free(parsed_message);
-        } break;
-
-        default: {
-            return -1;
-        }
-    }
-    return 0;
-}
-*/

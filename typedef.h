@@ -21,6 +21,8 @@ typedef enum banchobot_replies {
     BANCHOBOT_UNKNOWN = -1,
     BANCHOBOT_NONE = 0,
     BANCHOBOT_MULTI_CREATED,
+    BANCHOBOT_ALREADY_JOINED_CHANNEL,
+    BANCHOBOT_ROLL_RESULT,
     
 } banchobot_replies;
 

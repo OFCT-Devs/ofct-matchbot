@@ -3,8 +3,10 @@
 
 #include <libircclient.h>
 #include <libirc_rfcnumeric.h>
+#include <threads.h>
+
 #include "typedef.h"
 
-void match(irc_session_t *session);
+int match(void *__session);
 
 #endif
